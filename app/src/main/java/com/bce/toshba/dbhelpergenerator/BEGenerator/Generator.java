@@ -7,6 +7,10 @@ import android.database.sqlite.SQLiteOpenHelper;
 
 import com.bce.toshba.dbhelpergenerator.BEGenerator.GeneratorItem;
 
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Locale;
 
@@ -23,7 +27,7 @@ public class Generator {
         this.databaseName = pDatabaseName;
     }
 
-    public String StartGenerate(String pTableName){
+    public String StartGenerate(String pTableName) throws IOException {
         String message = "";
         tableName = pTableName;
 
@@ -32,8 +36,8 @@ public class Generator {
         GetAllColumnsAndDataTypes();
         GetPrimaryKeysColumnName();
 
+        GenerateDBHelperJavaClass("DBHelper");
 
-        String contentOfDBHelperClass = AppendToContentOfDBHelperClassString();
 
         return message;
     }
@@ -77,12 +81,12 @@ public class Generator {
         db.close();
     }
 
-
     // generate DBHelper class content
     public String AppendToContentOfDBHelperClassString(){
         String content = "";
         content += GenerateGetAllMethod(); // getList() method
         content += GenerateInsertMethod(); // insert() method
+        content += GenerateUpdateMethod(); // update() method
 
         return content;
     }
@@ -121,13 +125,13 @@ public class Generator {
         }
 
         content += "\tdb.insert(\"" + tableName + "\", null, contentValues);\n";
-        content += "\treturn true";
+        content += "\treturn true;";
         content += "}";
 
         return content;
     } // insert() method
     public String GenerateUpdateMethod(){
-        String content = "public boolean insert(" + autoGenerateEntityName + " param){\n";
+        String content = "public boolean update(" + autoGenerateEntityName + " param){\n";
         content += "\tSQLiteDatabase db = this.getWritableDatabase();\n";
         content += "\tContentValues contentValues = new ContentValues();\n";
 
@@ -136,11 +140,29 @@ public class Generator {
                 content += "\tcontentValues.put(\"" + columns.get(i).column_name + "\", param." + columns.get(i).column_name + ");\n";
         }
 
-        content += "\tdb.update(\"" + tableName + "\", null, contentValues);\n";
-        content += "\treturn true";
+        String primaryKeysWhereConditionText = "";
+        String primaryKeysValueText = "";
+        for(int i=0;i<primaryKeys.size();i++){
+            primaryKeysWhereConditionText += (i == primaryKeys.size()-1 ? "" : " AND ") + primaryKeys.get(i) + " = ?";
+            primaryKeysValueText += (i == primaryKeys.size()-1 ? "" : " , ") + " param." + primaryKeys.get(i);
+        }
+
+        content += "\tdb.update(\"" + tableName + "\", contentValues, " + primaryKeysWhereConditionText + ", new String[]{" + primaryKeysValueText + "});\n";
+        content += "\treturn true;";
         content += "}";
 
         return content;
     } // insert() method
 
+    public void GenerateDBHelperJavaClass(String fileName) throws IOException {
+        File f = new File(fileName + ".java");
+        if(!f.exists())
+            f.createNewFile();
+
+        String contentOfDBHelperClass = AppendToContentOfDBHelperClassString();
+
+        BufferedWriter bw = new BufferedWriter(new FileWriter(f));
+        bw.write(contentOfDBHelperClass);
+        bw.close();
+    }
 }
